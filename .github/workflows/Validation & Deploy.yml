@@ -62,14 +62,12 @@ jobs:
       - run: npm install -g html-validator-cli
       - name: Run W3C Validator
         run: |
-          for file in *.html; do
+          for file in $*.html; do
             if [ -f "$file" ]; then
               html-validator --file="$file" --verbose >> validation_report_w3c.txt || {
                 echo "::error::W3C Validator found issues in $file!"
                 exit 1
               }
-            else
-              echo "no file found" > validation_report_w3c.txt
             fi
           done
       - uses: actions/upload-artifact@v4
