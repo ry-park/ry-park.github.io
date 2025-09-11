@@ -1,0 +1,143 @@
+name: Validate and Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  check-index:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for index.html
+        run: |
+          if [ ! -f index.html ]; then
+            echo "index.html file not found" > validation_report_index.txt
+            echo "::error::index.html file not found"
+            exit 1
+          else
+            echo "index.html file found. All good." > validation_report_index.txt
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validation-report-index
+          path: validation_report_index.txt
+
+  check-htmlhint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - run: npm install -g htmlhint
+      - name: Run HTMLHint
+        run: |
+          htmlhint . > validation_report_htmlhint.txt || {
+            echo "::error::HTMLHint found issues!"
+            exit 1
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validation-report-htmlhint
+          path: validation_report_htmlhint.txt
+
+  check-w3c:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - run: npm install -g html-validator-cli
+      - name: Run W3C Validator
+        run: |
+          for file in *.html; do
+            if [ -f "$file" ]; then
+              html-validator --file="$file" --verbose >> validation_report_w3c.txt || {
+                echo "::error::W3C Validator found issues in $file!"
+                exit 1
+              }
+            fi
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validation-report-w3c
+          path: validation_report_w3c.txt
+
+  deploy:
+    needs: [check-index, check-htmlhint, check-w3c]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+      - uses: actions/deploy-pages@v4
+
+  generate-report:
+    if: always()   # выполняется всегда
+    needs: [check-index, check-htmlhint, check-w3c, deploy]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Index Report (if exists)
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: validation-report-index
+          path: reports
+
+      - name: Download HTMLHint Report (if exists)
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: validation-report-htmlhint
+          path: reports
+
+      - name: Download W3C Report (if exists)
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: validation-report-w3c
+          path: reports
+
+      - name: Combine Reports
+        run: |
+          echo "==== Final CI/CD Report ====" > final_report.txt
+
+          echo -e "\n### Index.html Check Report" >> final_report.txt
+          if [ -f reports/validation_report_index.txt ]; then
+            cat reports/validation_report_index.txt >> final_report.txt
+          else
+            echo "⚠️ Index report not found." >> final_report.txt
+          fi
+
+          echo -e "\n### HTMLHint Report" >> final_report.txt
+          if [ -f reports/validation_report_htmlhint.txt ]; then
+            cat reports/validation_report_htmlhint.txt >> final_report.txt
+          else
+            echo "⚠️ HTMLHint report not found." >> final_report.txt
+          fi
+
+          echo -e "\n### W3C Validation Report" >> final_report.txt
+          if [ -f reports/validation_report_w3c.txt ]; then
+            cat reports/validation_report_w3c.txt >> final_report.txt
+          else
+            echo "⚠️ W3C report not found." >> final_report.txt
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: final-report
+          path: final_report.txt
