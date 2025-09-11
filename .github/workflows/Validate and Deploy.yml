@@ -76,6 +76,7 @@ jobs:
           path: validation_report_w3c.txt
 
   deploy:
+    needs: [check-index, check-htmlhint, check-w3c]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
