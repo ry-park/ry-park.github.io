@@ -68,6 +68,8 @@ jobs:
                 echo "::error::W3C Validator found issues in $file!"
                 exit 1
               }
+            else
+              echo "no file found" > validation_report_w3c.txt
             fi
           done
       - uses: actions/upload-artifact@v4
