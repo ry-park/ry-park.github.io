@@ -63,7 +63,7 @@ jobs:
       - name: Run W3C Validator
         run: |
           for file in *.html; do
-            if [ -f "$file" ]; then
+            if [ -e "$file" ]; then
               html-validator --file="$file" --verbose >> validation_report_w3c.txt || {
                 echo "::error::W3C Validator found issues in $file!"
                 exit 1
